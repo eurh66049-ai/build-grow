@@ -92,19 +92,8 @@ export const useBookDetails = (bookId: string) => {
               }
             }
             if (isSupabasePublicFileUrl(pdfUrl)) {
-              // محاولة تحسين الرابط بدون حظر العرض إذا فشل
-              try {
-                const enhanced = await Promise.race([
-                  enhancePDFUrl(pdfUrl),
-                  new Promise<string>((resolve) => setTimeout(() => resolve(pdfUrl), 2000)),
-                ]);
-                if (enhanced) {
-                  pdfUrl = convertPdfToProxyUrl(enhanced);
-                }
-              } catch {
-                // تجاهل أخطاء تحسين الرابط — استخدم الرابط الأصلي
-                pdfUrl = convertPdfToProxyUrl(pdfUrl);
-              }
+              // تحويل فوري بدون أي استعلام شبكي — لا حاجة للتحقق من وجود الملف هنا
+              pdfUrl = convertPdfToProxyUrl(pdfUrl);
             }
           }
 

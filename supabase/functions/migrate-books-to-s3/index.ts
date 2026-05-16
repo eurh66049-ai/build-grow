@@ -108,7 +108,7 @@ async function migrateOne(
     }
   }
 
-  if (Object.keys(update).length > 0) {
+  if (Object.keys(update).length > 0 || errors.length > 0) {
     update.s3_migrated_at = new Date().toISOString();
     if (errors.length) update.s3_migration_error = errors.join(" | ");
     const { error: updErr } = await supabase
@@ -116,8 +116,6 @@ async function migrateOne(
       .update(update)
       .eq("id", book.id);
     if (updErr) errors.push(`db: ${updErr.message}`);
-  } else if (errors.length === 0) {
-    // nothing to do (already migrated)
   }
 
   return { id: book.id, cover: coverNew, file: fileNew, errors };
@@ -153,6 +151,9 @@ serve(async (req) => {
         "and(cover_image_url.ilike.%supabase.co%,s3_cover_image_url.is.null)," +
         "and(book_file_url.ilike.%supabase.co%,s3_book_file_url.is.null)",
       )
+      // Skip books that already failed — they block the queue otherwise.
+      // Clear s3_migration_error in DB to retry them.
+      .is("s3_migration_error", null)
       .order("file_size", { ascending: true, nullsFirst: true })
       .limit(batchSize);
 

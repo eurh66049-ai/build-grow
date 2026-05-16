@@ -153,6 +153,9 @@ serve(async (req) => {
         "and(cover_image_url.ilike.%supabase.co%,s3_cover_image_url.is.null)," +
         "and(book_file_url.ilike.%supabase.co%,s3_book_file_url.is.null)",
       )
+      // Skip books that already failed — they block the queue otherwise.
+      // Clear s3_migration_error in DB to retry them.
+      .is("s3_migration_error", null)
       .order("file_size", { ascending: true, nullsFirst: true })
       .limit(batchSize);
 

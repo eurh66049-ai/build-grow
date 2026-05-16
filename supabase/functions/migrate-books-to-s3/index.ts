@@ -108,7 +108,7 @@ async function migrateOne(
     }
   }
 
-  if (Object.keys(update).length > 0) {
+  if (Object.keys(update).length > 0 || errors.length > 0) {
     update.s3_migrated_at = new Date().toISOString();
     if (errors.length) update.s3_migration_error = errors.join(" | ");
     const { error: updErr } = await supabase
@@ -116,8 +116,6 @@ async function migrateOne(
       .update(update)
       .eq("id", book.id);
     if (updErr) errors.push(`db: ${updErr.message}`);
-  } else if (errors.length === 0) {
-    // nothing to do (already migrated)
   }
 
   return { id: book.id, cover: coverNew, file: fileNew, errors };

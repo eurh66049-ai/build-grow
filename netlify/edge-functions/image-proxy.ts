@@ -42,10 +42,22 @@ export default async (request: Request, context: any) => {
   const supabaseBase = 'https://kydmyxsgyxeubhmqzrgo.supabase.co/storage/v1';
   const s3Base = 'https://kotobi.s3.eu-north-1.amazonaws.com';
 
-  const transformParams = new URLSearchParams({ width, height, resize, quality, format });
-  const targetUrl = isS3Bucket
-    ? `${s3Base}/${filePath}`
-    : `${supabaseBase}/render/image/public/${bucket}/${filePath}?${transformParams.toString()}`;
+  let targetUrl: string;
+  if (isS3Bucket) {
+    // نستخدم wsrv.nl لتصغير صور S3 (مجاني + سريع + WebP) — Edge فقط يعيد بثّ ملف صغير
+    const wsrvParams = new URLSearchParams();
+    wsrvParams.set('url', `${s3Base}/${filePath}`.replace(/^https?:\/\//, ''));
+    wsrvParams.set('w', width);
+    wsrvParams.set('h', height);
+    wsrvParams.set('fit', resize === 'contain' ? 'contain' : 'cover');
+    wsrvParams.set('q', quality);
+    wsrvParams.set('output', format);
+    wsrvParams.set('we', '');
+    targetUrl = `https://wsrv.nl/?${wsrvParams.toString()}`;
+  } else {
+    const transformParams = new URLSearchParams({ width, height, resize, quality, format });
+    targetUrl = `${supabaseBase}/render/image/public/${bucket}/${filePath}?${transformParams.toString()}`;
+  }
 
   try {
     const upstream = await fetch(targetUrl, {

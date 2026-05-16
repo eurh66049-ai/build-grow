@@ -51,30 +51,14 @@ export const convertToProxyUrl = (
       return cleanUrl;
     }
 
-    // للأغلفة على S3: نستخدم wsrv.nl لتصغير فوري عبر CDN عالمي بدل قفزة Netlify
-    // هذا أسرع بكثير ويعمل في كل البيئات (dev + production)
-    const buildWsrvUrl = (s3Url: string) => {
-      const params = new URLSearchParams();
-      params.set('url', s3Url.replace(/^https?:\/\//, ''));
-      if (options.width) params.set('w', String(options.width));
-      if (options.height) params.set('h', String(options.height));
-      if (options.resize === 'cover') params.set('fit', 'cover');
-      else if (options.resize === 'contain') params.set('fit', 'contain');
-      if (options.quality) params.set('q', String(options.quality));
-      params.set('output', options.format || 'webp');
-      params.set('we', ''); // without enlargement
-      return `https://wsrv.nl/?${params.toString()}`;
-    };
-
     if (cleanUrl.startsWith(S3_REF_PREFIX)) {
       const filePath = cleanUrl.slice(S3_REF_PREFIX.length);
-      if (!filePath) return originalUrl;
-      const s3Url = `https://kotobi.s3.eu-north-1.amazonaws.com/${filePath}`;
-      return (options.width || options.height) ? buildWsrvUrl(s3Url) : s3Url;
+      return filePath ? buildProxyUrl('s3', filePath, options) : originalUrl;
     }
 
     if (S3_PUBLIC_URL_RE.test(cleanUrl)) {
-      return (options.width || options.height) ? buildWsrvUrl(cleanUrl) : cleanUrl;
+      const filePath = cleanUrl.replace(S3_PUBLIC_URL_RE, '');
+      return filePath ? buildProxyUrl('s3', filePath, options) : originalUrl;
     }
 
     // التحقق من أن الرابط من Supabase Storage

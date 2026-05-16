@@ -178,7 +178,7 @@ serve(async (req) => {
 
     // Background processing to avoid CPU/wall-time limits on large batches.
     // Process with limited concurrency.
-    const CONCURRENCY = 4;
+    const CONCURRENCY = 1;
     const runAll = async () => {
       let i = 0;
       const workers = Array.from({ length: Math.min(CONCURRENCY, bookList.length) }, async () => {

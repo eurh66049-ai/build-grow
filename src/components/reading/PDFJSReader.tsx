@@ -562,12 +562,7 @@ const PDFJSReader = () => {
         toast.success('تم تحميل الكتاب بنجاح');
       } catch (loadError) {
         console.error('خطأ في تحميل PDF:', loadError);
-        // S3 fallback: لو فشل من S3، نجرب الرابط الأصلي على Supabase تلقائياً
-        const fallback = s3ToSupabaseUrl(urlOverride || book.book_file_url);
-        if (!urlOverride && fallback && fallback !== book.book_file_url) {
-          console.warn('[S3 fallback] PDF failed, retrying with Supabase original');
-          return loadPDFDocument(fallback);
-        }
+        // البروكسي /f/ يتولّى الجلب من S3 ثم Supabase كاحتياط — لا حاجة لكشف رابط Supabase في المتصفح.
         toast.error('فشل في تحميل الكتاب');
         setLoadingProgress(0);
       } finally {

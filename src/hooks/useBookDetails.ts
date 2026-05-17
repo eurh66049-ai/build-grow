@@ -93,7 +93,7 @@ export const useBookDetails = (bookId: string) => {
                 pdfUrl = 'https://' + pdfUrl;
               }
             }
-            if (isSupabasePublicFileUrl(pdfUrl)) {
+            if (shouldProxyFileUrl(pdfUrl)) {
               // تحويل فوري بدون أي استعلام شبكي — لا حاجة للتحقق من وجود الملف هنا
               pdfUrl = convertPdfToProxyUrl(pdfUrl);
             }

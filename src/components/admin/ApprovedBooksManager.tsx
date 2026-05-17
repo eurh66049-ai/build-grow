@@ -411,11 +411,11 @@ const ApprovedBooksManager: React.FC<ApprovedBooksManagerProps> = ({ onBookDelet
                         onBookDeleted={onBookDeleted}
                       />
                       
-                      {book.book_file_url && (
+                      {(book.s3_book_file_url || book.book_file_url) && (
                         <Button 
                           variant="outline" 
                           size="sm"
-                          onClick={() => window.open(book.book_file_url!, '_blank')}
+                          onClick={() => window.open((book.s3_book_file_url || book.book_file_url)!, '_blank')}
                         >
                           <Eye className="ml-1 h-4 w-4" />
                           عرض الملف

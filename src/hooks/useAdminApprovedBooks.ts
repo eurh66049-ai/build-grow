@@ -15,6 +15,7 @@ interface AdminApprovedBook {
   page_count: number | null;
   cover_image_url: string | null;
   book_file_url: string | null;
+  s3_book_file_url: string | null;
   file_type: string | null;
   display_type: string;
   rights_confirmation: boolean | null;

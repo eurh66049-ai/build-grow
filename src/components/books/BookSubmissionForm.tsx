@@ -1829,7 +1829,7 @@ const BookSubmissionForm: React.FC<BookSubmissionFormProps> = ({ onSuccess }) =>
           read: false
         });
 
-        // Send push notification via OneSignal
+        // Send push notification via Firebase Cloud Messaging
         try {
           const { sendPushToUser } = await import('@/utils/pushNotification');
           await sendPushToUser(user.id, notifTitle, notifMessage, undefined, 'info');

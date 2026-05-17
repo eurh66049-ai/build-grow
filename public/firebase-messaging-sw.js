@@ -15,25 +15,11 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// استقبال الإشعارات في الخلفية
+// ملاحظة: حمولة FCM تحتوي على webpush.notification الذي يعرضه المتصفح تلقائياً.
+// لا نستدعي showNotification هنا لتجنب ظهور الإشعار مرتين.
+// onBackgroundMessage يُستخدم فقط للتسجيل أو معالجة البيانات الإضافية.
 messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw] Background message:', payload);
-
-  const title = payload.notification?.title || payload.data?.title || 'إشعار جديد';
-  const body = payload.notification?.body || payload.data?.body || '';
-  const targetUrl = payload.data?.url || payload.fcmOptions?.link || '/';
-
-  const options = {
-    body,
-    icon: '/lovable-uploads/5882b036-f2e2-4fec-bc07-9ee97960056a.png',
-    badge: '/favicon.png',
-    dir: 'rtl',
-    lang: 'ar',
-    tag: payload.data?.tag || 'kotobi-notification',
-    data: { url: targetUrl },
-  };
-
-  self.registration.showNotification(title, options);
+  console.log('[firebase-messaging-sw] Background message (auto-displayed by webpush):', payload);
 });
 
 // النقر على الإشعار يفتح الموقع

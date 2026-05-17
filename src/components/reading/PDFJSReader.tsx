@@ -536,9 +536,11 @@ const PDFJSReader = () => {
         const fileUrl = urlOverride || book.book_file_url;
         const loadingTask = pdfjsLib.getDocument({
           url: fileUrl,
-          disableAutoFetch: true,
+          // جلب الملف بالكامل تدريجياً في الخلفية لتقليل عدد طلبات range
+          // (كل طلب على S3 يحتاج CORS preflight منفصل → بطء واضح)
+          disableAutoFetch: false,
           disableStream: false,
-          rangeChunkSize: 262144,
+          rangeChunkSize: 1048576, // 1MB بدل 256KB → طلبات أقل
           isEvalSupported: false,
           cMapUrl: 'https://unpkg.com/pdfjs-dist@3.11.174/cmaps/',
           cMapPacked: true,

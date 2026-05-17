@@ -121,6 +121,9 @@ async function migrateOne(
     if (updErr) errors.push(`db: ${updErr.message}`);
   }
 
+  // Small delay to avoid hitting the connectors gateway rate limit (429).
+  await new Promise((r) => setTimeout(r, 500));
+
   return { id: book.id, cover: coverNew, file: fileNew, errors };
 }
 

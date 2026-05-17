@@ -61,15 +61,18 @@ async function uploadToS3(
 ): Promise<string> {
   const objectKey = deriveObjectKey(sourceUrl, kind);
   const dl = await fetch(sourceUrl);
-  if (!dl.ok) throw new Error(`download ${dl.status}`);
+  if (!dl.ok || !dl.body) throw new Error(`download ${dl.status}`);
   const contentType = dl.headers.get("content-type") ||
     (kind === "cover" ? "image/jpeg" : "application/pdf");
-  const buf = await dl.arrayBuffer();
+  const contentLength = dl.headers.get("content-length");
   const putUrl = await getSignedPutUrl(objectKey, lovableKey, s3Key);
+  const headers: Record<string, string> = { "Content-Type": contentType };
+  if (contentLength) headers["Content-Length"] = contentLength;
+  // Stream the body directly to S3 — never load into memory.
   const up = await fetch(putUrl, {
     method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: buf,
+    headers,
+    body: dl.body,
   });
   if (!up.ok) throw new Error(`upload ${up.status}: ${await up.text().catch(() => "")}`);
   return `${S3_PUBLIC_URL_PREFIX}${objectKey}`;
@@ -175,7 +178,7 @@ serve(async (req) => {
 
     // Background processing to avoid CPU/wall-time limits on large batches.
     // Process with limited concurrency.
-    const CONCURRENCY = 4;
+    const CONCURRENCY = 1;
     const runAll = async () => {
       let i = 0;
       const workers = Array.from({ length: Math.min(CONCURRENCY, bookList.length) }, async () => {

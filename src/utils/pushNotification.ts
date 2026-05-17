@@ -1,7 +1,7 @@
 import { supabase, supabaseFunctions } from '@/lib/supabaseClient';
 
 /**
- * Send a push notification to a user via OneSignal Edge Function
+ * Send a Firebase Cloud Messaging push notification to a user
  * Call this after inserting a notification into the notifications table
  */
 export const sendPushToUser = async (
@@ -12,7 +12,7 @@ export const sendPushToUser = async (
   type?: string
 ): Promise<boolean> => {
   try {
-    const { data, error } = await supabaseFunctions.functions.invoke('send-onesignal-push', {
+    const { data, error } = await supabaseFunctions.functions.invoke('send-fcm-push', {
       body: {
         user_id: userId,
         title,
@@ -23,14 +23,14 @@ export const sendPushToUser = async (
     });
 
     if (error) {
-      console.error('[Push] Error sending push notification:', error);
+      console.error('[Push] Error sending FCM push:', error);
       return false;
     }
 
-    console.log('[Push] Notification sent:', data);
+    console.log('[Push] FCM sent:', data);
     return true;
   } catch (error) {
-    console.error('[Push] Failed to send push notification:', error);
+    console.error('[Push] Failed to send FCM push:', error);
     return false;
   }
 };
@@ -52,7 +52,6 @@ export const createNotificationWithPush = async (
   }
 ): Promise<boolean> => {
   try {
-    // 1. Insert notification into database
     const { error: dbError } = await supabase.from('notifications').insert({
       user_id: userId,
       title,
@@ -70,7 +69,6 @@ export const createNotificationWithPush = async (
       return false;
     }
 
-    // 2. Send push notification via OneSignal
     await sendPushToUser(userId, title, message, options?.targetUrl, options?.type);
 
     return true;

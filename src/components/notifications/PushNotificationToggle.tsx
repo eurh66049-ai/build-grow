@@ -1,7 +1,7 @@
 import React from 'react';
-import { Bell, BellOff, BellRing, Loader2, ShieldAlert } from 'lucide-react';
+import { BellOff, BellRing, Loader2, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useOneSignalPush } from '@/hooks/useOneSignalPush';
+import { useFirebasePush } from '@/hooks/useFirebasePush';
 import { useAuth } from '@/context/AuthContext';
 import {
   Tooltip,
@@ -15,14 +15,13 @@ interface PushNotificationToggleProps {
   className?: string;
 }
 
-const PushNotificationToggle: React.FC<PushNotificationToggleProps> = ({ 
+const PushNotificationToggle: React.FC<PushNotificationToggleProps> = ({
   variant = 'icon',
   className = ''
 }) => {
   const { user } = useAuth();
-  const { isSupported, isSubscribed, permission, loading, subscribe, unsubscribe, initialized } = useOneSignalPush();
+  const { isSupported, isSubscribed, permission, loading, subscribe, unsubscribe, initialized } = useFirebasePush();
 
-  // إخفاء الأيقونة أثناء التهيئة وبعد التفعيل
   if (!user || !isSupported || !initialized || isSubscribed) return null;
 
   const handleToggle = async () => {
@@ -64,10 +63,10 @@ const PushNotificationToggle: React.FC<PushNotificationToggleProps> = ({
         ) : (
           <BellOff className="h-4 w-4" />
         )}
-        {permission === 'denied' 
-          ? 'الإشعارات محظورة' 
-          : isSubscribed 
-            ? 'الإشعارات مفعّلة ✅' 
+        {permission === 'denied'
+          ? 'الإشعارات محظورة'
+          : isSubscribed
+            ? 'الإشعارات مفعّلة ✅'
             : 'تفعيل الإشعارات'}
       </Button>
     );

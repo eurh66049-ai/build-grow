@@ -4,7 +4,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { validatePDFUrl, enhancePDFUrl } from '@/utils/pdfValidator';
 import { convertPdfToProxyUrl } from '@/utils/imageProxy';
 
-const isSupabasePublicFileUrl = (url: string) => url.includes('/storage/v1/object/public/');
+const shouldProxyFileUrl = (url: string) =>
+  url.includes('/storage/v1/object/public/') ||
+  /^https?:\/\/kotobi\.s3\.[^/]+\.amazonaws\.com\//i.test(url);
 
 interface BookDetails {
   id: string;
@@ -91,7 +93,7 @@ export const useBookDetails = (bookId: string) => {
                 pdfUrl = 'https://' + pdfUrl;
               }
             }
-            if (isSupabasePublicFileUrl(pdfUrl)) {
+            if (shouldProxyFileUrl(pdfUrl)) {
               // تحويل فوري بدون أي استعلام شبكي — لا حاجة للتحقق من وجود الملف هنا
               pdfUrl = convertPdfToProxyUrl(pdfUrl);
             }

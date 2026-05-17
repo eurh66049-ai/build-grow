@@ -1,78 +1,131 @@
-export default async (request: Request, context: any) => {
-  const url = new URL(request.url);
-  const originalPath = url.pathname;
+// File proxy: serves book files (PDFs) from S3 first, falls back to Supabase.
+// Supports Range requests so PDF.js can stream pages.
+//
+// Path shapes:
+//   /f/book-files/books/<name>.pdf   ← legacy Supabase bucket name
+//   /f/book-covers/covers/<name>.jpg ← legacy Supabase bucket name
+//   /f/s3/books/<name>.pdf           ← explicit S3
+//   /f/s3/covers/<name>.jpg          ← explicit S3
 
-  // Expect paths like: /f/bucket-name/path/to/file.pdf
-  const parts = originalPath.split('/').filter(Boolean);
-  if (parts.length < 3 || parts[0] !== 'f') {
-    return new Response(JSON.stringify({ error: 'Invalid path. Use /f/<bucket>/<path>' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }
-    });
+const SUPABASE_BASE =
+  "https://kydmyxsgyxeubhmqzrgo.supabase.co/storage/v1/object/public";
+const S3_BASE = "https://kotobi.s3.eu-north-1.amazonaws.com";
+
+// Map the first path segment to the S3 key prefix used during migration.
+// Files migrated to S3 live at kotobi/books/<name> and kotobi/covers/<name>.
+function toS3Url(bucket: string, filePath: string): string | null {
+  if (bucket === "s3") return `${S3_BASE}/${filePath}`;
+  if (bucket === "book-files") {
+    // Supabase path was books/<name>, S3 is books/<name>
+    const key = filePath.startsWith("books/") ? filePath : `books/${filePath}`;
+    return `${S3_BASE}/${key}`;
+  }
+  if (bucket === "book-covers") {
+    const key = filePath.startsWith("covers/") ? filePath : `covers/${filePath}`;
+    return `${S3_BASE}/${key}`;
+  }
+  return null;
+}
+
+function toSupabaseUrl(bucket: string, filePath: string, search: string): string | null {
+  if (bucket === "s3") {
+    // s3/books/<name> → book-files/books/<name>
+    if (filePath.startsWith("books/"))
+      return `${SUPABASE_BASE}/book-files/${filePath}${search}`;
+    if (filePath.startsWith("covers/"))
+      return `${SUPABASE_BASE}/book-covers/${filePath}${search}`;
+    return null;
+  }
+  return `${SUPABASE_BASE}/${bucket}/${filePath}${search}`;
+}
+
+export default async (request: Request, _context: unknown) => {
+  const url = new URL(request.url);
+  const parts = url.pathname.split("/").filter(Boolean);
+  if (parts.length < 3 || parts[0] !== "f") {
+    return new Response(
+      JSON.stringify({ error: "Invalid path. Use /f/<bucket>/<path>" }),
+      {
+        status: 400,
+        headers: {
+          "content-type": "application/json",
+          "access-control-allow-origin": "*",
+        },
+      },
+    );
   }
 
   const bucket = parts[1];
-  const filePath = parts.slice(2).join('/');
+  const filePath = parts.slice(2).join("/");
 
-  // Generate ETag
-  const etagSource = `${bucket}/${filePath}`;
-  const etag = `"file-${await hashString(etagSource)}"`;
+  const range = request.headers.get("range");
+  const ifNoneMatch = request.headers.get("if-none-match");
+  const ifRange = request.headers.get("if-range");
 
-  // 304 Not Modified
-  const ifNoneMatch = request.headers.get('if-none-match');
-  if (ifNoneMatch === etag) {
-    return new Response(null, {
-      status: 304,
-      headers: {
-        'etag': etag,
-        'cache-control': 'public, max-age=31536000, immutable',
-        'access-control-allow-origin': '*'
+  // Build candidate URLs: try S3 first, then Supabase as fallback.
+  const candidates: string[] = [];
+  const s3Url = toS3Url(bucket, filePath);
+  if (s3Url) candidates.push(s3Url);
+  const supabaseUrl = toSupabaseUrl(bucket, filePath, url.search);
+  if (supabaseUrl) candidates.push(supabaseUrl);
+
+  let upstream: Response | null = null;
+  let lastStatus = 502;
+  for (const target of candidates) {
+    try {
+      const upstreamHeaders: Record<string, string> = {
+        accept: request.headers.get("accept") || "*/*",
+      };
+      if (range) upstreamHeaders["range"] = range;
+      if (ifNoneMatch) upstreamHeaders["if-none-match"] = ifNoneMatch;
+      if (ifRange) upstreamHeaders["if-range"] = ifRange;
+
+      const res = await fetch(target, { headers: upstreamHeaders });
+      lastStatus = res.status;
+      if (res.ok || res.status === 206 || res.status === 304) {
+        upstream = res;
+        break;
       }
+    } catch {
+      // try next candidate
+    }
+  }
+
+  if (!upstream) {
+    return new Response(JSON.stringify({ error: "File not found" }), {
+      status: lastStatus,
+      headers: {
+        "content-type": "application/json",
+        "access-control-allow-origin": "*",
+      },
     });
   }
 
-  const supabaseBase = 'https://kydmyxsgyxeubhmqzrgo.supabase.co/storage/v1/object/public';
-  const targetUrl = `${supabaseBase}/${bucket}/${filePath}${url.search}`;
-
-  try {
-    const upstream = await fetch(targetUrl, {
-      headers: { 'accept': request.headers.get('accept') || '*/*' }
-    });
-
-    if (!upstream.ok) {
-      return new Response(JSON.stringify({ error: 'File not found' }), {
-        status: upstream.status,
-        headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }
-      });
-    }
-
-    const headers = new Headers(upstream.headers);
-    const contentType = headers.get('content-type') || 'application/octet-stream';
-    headers.set('cache-control', 'public, max-age=31536000, immutable');
-    headers.set('cdn-cache-control', 'public, max-age=31536000, immutable');
-    headers.set('netlify-cdn-cache-control', 'public, durable, max-age=31536000, immutable');
-    headers.set('etag', etag);
-    headers.set('access-control-allow-origin', '*');
-    headers.set('x-cdn-status', 'hit');
-
-    // Allow range requests for PDF streaming
-    if (upstream.headers.get('accept-ranges')) {
-      headers.set('accept-ranges', 'bytes');
-    }
-
-    return new Response(upstream.body, { status: 200, headers });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: 'CDN proxy failure', message: err?.message || 'unknown' }), {
-      status: 500,
-      headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }
-    });
+  // Forward upstream headers but enforce CORS + caching.
+  const headers = new Headers();
+  const passThrough = [
+    "content-type",
+    "content-length",
+    "content-range",
+    "accept-ranges",
+    "etag",
+    "last-modified",
+  ];
+  for (const h of passThrough) {
+    const v = upstream.headers.get(h);
+    if (v) headers.set(h, v);
   }
+  if (!headers.has("accept-ranges")) headers.set("accept-ranges", "bytes");
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  headers.set(
+    "netlify-cdn-cache-control",
+    "public, durable, max-age=31536000, immutable",
+  );
+  headers.set("access-control-allow-origin", "*");
+  headers.set("access-control-allow-methods", "GET, HEAD, OPTIONS");
+  headers.set("access-control-allow-headers", "range, if-none-match, if-range");
+  headers.set("access-control-expose-headers",
+    "content-length, content-range, accept-ranges, etag, last-modified");
+
+  return new Response(upstream.body, { status: upstream.status, headers });
 };
-
-async function hashString(str: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
-}

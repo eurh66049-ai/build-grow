@@ -133,27 +133,31 @@ export const optimizeImageUrl = (
 };
 
 /**
- * تحويل رابط PDF Supabase إلى رابط proxy
+ * تحويل رابط PDF (Supabase أو S3) إلى رابط proxy على نطاق الموقع.
+ * - يضمن عدم ظهور روابط Supabase أو AWS مباشرة في المتصفح.
+ * - يتجاوز مشاكل CORS لأن البروكسي يضيف الترويسات اللازمة لتدفّق PDF.
  */
 export const convertPdfToProxyUrl = (originalUrl: string): string => {
   try {
-    // التحقق من أن الرابط من Supabase Storage
-    if (!originalUrl.includes(SUPABASE_STORAGE_BASE)) {
-      return originalUrl; // إرجاع الرابط الأصلي إذا لم يكن من Supabase
+    if (!originalUrl) return originalUrl;
+
+    // S3: https://kotobi.s3.<region>.amazonaws.com/<key>  →  /f/s3/<key>
+    if (S3_PUBLIC_URL_RE.test(originalUrl)) {
+      const key = originalUrl.replace(S3_PUBLIC_URL_RE, '');
+      if (!key) return originalUrl;
+      return `/f/s3/${key}`;
     }
 
-    // استخراج bucket واسم الملف
-    const pathAfterBase = originalUrl.replace(SUPABASE_STORAGE_BASE, '');
-    const [bucket, ...pathParts] = pathAfterBase.split('/');
-    const filePath = pathParts.join('/');
-
-    if (!bucket || !filePath) {
-      console.warn('Invalid Supabase storage URL:', originalUrl);
-      return originalUrl;
+    // Supabase: .../object/public/<bucket>/<path>  →  /f/<bucket>/<path>
+    if (originalUrl.includes(SUPABASE_STORAGE_BASE)) {
+      const pathAfterBase = originalUrl.replace(SUPABASE_STORAGE_BASE, '');
+      const [bucket, ...pathParts] = pathAfterBase.split('/');
+      const filePath = pathParts.join('/');
+      if (!bucket || !filePath) return originalUrl;
+      return `/f/${bucket}/${filePath}`;
     }
 
-    // بناء رابط الـ proxy للملفات (بدون معاملات تحسين للـ PDF)
-    return `/f/${bucket}/${filePath}`;
+    return originalUrl;
   } catch (error) {
     console.error('Error converting PDF URL to proxy:', error);
     return originalUrl;
